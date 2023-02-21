@@ -162,4 +162,4 @@ api.add_resource(GetSighting, '/get')
 
 if __name__ == '__main__':
     Init()
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True)
