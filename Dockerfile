@@ -2,7 +2,7 @@ FROM ubuntu:lunar
 
 RUN apt-get update && apt-get install -y git make wget bzip2 build-essential pip autoconf cmake
 WORKDIR /home/ubuntu/
-RUN git clone https://github.com/TasyDevilsky/misp-sighting-server
+RUN git clone -b TasyDevilsky-Docker https://github.com/TasyDevilsky/misp-sighting-server
 WORKDIR /home/ubuntu/misp-sighting-server/
 RUN git submodule init
 RUN git submodule update
