@@ -3,7 +3,7 @@
 #
 #    ReST server for misp sighting server
 #
-#    Copyright (C) 2017 Alexandre Dulaunoy
+#    Copyright (C) 2017-2023 Alexandre Dulaunoy
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
@@ -25,6 +25,8 @@ import datetime
 import pytz
 import time
 import configparser
+import uuid
+import time
 
 app = Flask(__name__)
 api = Api(app)
@@ -35,38 +37,78 @@ cfg.read('../cfg/server.cfg')
 ardb_port = cfg.get('server', 'ardb_port')
 api_key = cfg.get('server', 'api_key')
 default_source = cfg.get('server', 'default_source')
+default_org_uuid = cfg.get('server', 'default_org_uuid')
+journal = cfg.get('server', 'journal')
+version = '0.2'
+r = redis.StrictRedis(port=ardb_port, db=0, decode_responses=True, charset='utf-8')
 
-version = '0.1'
-r = [
-    redis.StrictRedis(port=ardb_port, db=0, decode_responses=True,
-                      charset='utf-8')
-]
+
+def _validate_uuid(value=None):
+    if uuid is None:
+        return False
+    try:
+        _val = uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def Init():
     d = datetime.datetime.utcnow()
     d_with_timezone = d.replace(tzinfo=pytz.UTC)
-    for i in range(0, 1):
-        r[i].set('misp-sighting-server:version', version)
-        r[i].set('misp-sighting-server:startup', d_with_timezone.isoformat())
+    r.set('misp-sighting-server:version', version)
+    r.set('misp-sighting-server:startup', d_with_timezone.isoformat())
+    r.set('misp-sighting-server:get', 0)
+    r.set('misp-sighting-server:set', 0)
+
+
+Init()
+
 
 def TestBackend(version=version):
     version = r.get('misp-sighting-server:version')
     startup = r.get('misp-sighting-server:startup')
-    return (version, startup)
+    get = r.get('misp-sighting-server:get')
+    set_stat = r.get('misp-sighting-server:set')
+
+    return (version, startup, get, set_stat)
+
+
+def UpdateJournal(value=None):
+    if value is None:
+        return False
+    now = datetime.datetime.utcnow()
+    year_month_day_format = '%Y%m%d'
+    log_day = now.strftime(year_month_day_format)
+    ns = time.time_ns()
+    r.zadd(log_day, {value: ns})
+    return True
+
+
+def UpdatePayload(value=None, when=None, new_payload=None):
+    if when is None or new_payload is None or value is None:
+        return False
+    ret = r.hset(value, when, new_payload)
+    return True
 
 
 class GetStatus(Resource):
     def get(self):
         status = TestBackend()
-        return {'version': status[0], 'startup': status[1]}
+        return {
+            'version': status[0],
+            'startup': status[1],
+            'get': status[2],
+            'set': status[3],
+        }
+
 
 class AddSighting(Resource):
     def put(self):
         if request.form['value'] is None:
             return False
         if not (request.headers.get('X-Api-Key') == api_key):
-            print (request.headers)
+            print(request.headers)
             return False
         if not request.form.get('epoch'):
             when = int(time.time())
@@ -76,14 +118,32 @@ class AddSighting(Resource):
             source = default_source
         else:
             source = request.form['source']
+        if not request.form.get('org_uuid'):
+            org_uuid = default_org_uuid
+        else:
+            org_uuid = request.form['org_uuid']
+        if not _validate_uuid(org_uuid):
+            return {'error': 'org_uuid is not a valid UUID'}
+
         request_type = 0
         if request.form.get('type'):
             request_type = int(request.form['type'])
-        if r[request_type].hset(request.form['value'], when,
-                  source):
+        payload = f'{source}:{request_type}:{org_uuid}'
+        if r.hset(request.form['value'], when, payload):
+            if journal:
+                UpdateJournal(value=request.form['value'])
+            r.incr('misp-sighting-server:set')
             return True
         else:
-            return False
+            existing_payload = r.hget(request.form['value'], when)
+            updated_payload = f'{existing_payload}\n{payload}'
+            if UpdatePayload(
+                value=request.form['value'], when=when, new_payload=updated_payload
+            ):
+                UpdateJournal(value=request.form['value'])
+                r.incr('misp-sighting-server:set')
+                return True
+
 
 class GetSighting(Resource):
     def get(self):
@@ -92,7 +152,9 @@ class GetSighting(Resource):
         request_type = 0
         if request.form.get('type'):
             request_type = int(request.form['type'])
-        return r[request_type].hgetall(request.form['value'])
+        r.incr('misp-sighting-server:get')
+        return r.hgetall(request.form['value'])
+
 
 api.add_resource(GetStatus, '/')
 api.add_resource(AddSighting, '/add')
