@@ -1,4 +1,20 @@
-# misp-sighting-server
+# Docker version
+It's just personal project aimed to learn something with creation docker image
+
+- Builded on Ubuntu:22.10
+- Using kvrocks
+- Using supervisord to run backend and frontend together.
+- It counts with local version, to build it with worker need to change `Dockerfile`.
+- Run on port `5000`
+
+
+> Needs to be fixed !
+- Using default values from `cfg/server.cfg.sample`
+- Add frontend output to stout
+- Optimalize it ! 
+
+---
+## misp-sighting-server
 
 MISP sighting server is a fast sighting server to store and look-up sightings on attributes (network indicators, file hashes, system indicators) in a
 space efficient way.
