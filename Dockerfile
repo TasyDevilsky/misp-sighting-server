@@ -18,15 +18,16 @@ RUN python3 x.py build
 WORKDIR /home/ubuntu/misp-sighting-server/
 RUN pip3 install -r REQUIREMENTS
 
-
-RUN cp cfg/server.cfg.sample cfg/server.cfg
+RUN mkdir -p volume/config/
+RUN mkdir volume/logs
+RUN cp cfg/server.cfg.sample volume/config/server.cfg
 
 # Change default configs ...
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf 
-ADD kvrocks.conf /home/ubuntu/misp-sighting-server/back-end/kvrocks/kvrocks.conf
+ADD kvrocks.conf /home/ubuntu/misp-sighting-server/volume/config/kvrocks.conf
 
 
 EXPOSE 5000
-VOLUME [ "/home/ubuntu/misp-sighting-server/kvrocks_db" ]
+VOLUME [ "/home/ubuntu/misp-sighting-server/volume" ]
 ENTRYPOINT ["/usr/bin/supervisord"]
 

@@ -32,7 +32,7 @@ app = Flask(__name__)
 api = Api(app)
 
 cfg = configparser.ConfigParser()
-cfg.read('../cfg/server.cfg')
+cfg.read('../volume/config/server.cfg')
 
 ardb_port = cfg.get('server', 'ardb_port')
 api_key = cfg.get('server', 'api_key')
